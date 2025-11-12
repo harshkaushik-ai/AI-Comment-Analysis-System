@@ -3,7 +3,7 @@ import axios from "axios";
 import { spawn } from "child_process";
 import Comment from "../models/comment.js";
 import User from "../models/user.js";
-import { authMiddleware } from "../middleware/authmiddleware.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 

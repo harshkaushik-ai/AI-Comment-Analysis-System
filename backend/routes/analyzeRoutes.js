@@ -1,7 +1,7 @@
 import express from "express";
 import Comment from "../models/comment.js";
 import verifyToken from "../middleware/verifyToken.js";
-import authMiddleware from "../middleware/authmiddleware.js";
+import authMiddleware from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
