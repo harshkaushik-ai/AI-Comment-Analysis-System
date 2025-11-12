@@ -1,19 +1,22 @@
 import express from "express";
 import axios from "axios";
 import { spawn } from "child_process";
+import Comment from "../models/comment.js";
+import User from "../models/user.js";
+import { authMiddleware } from "../middleware/authmiddleware.js";
 
 const router = express.Router();
 
+
 router.post("/", async (req, res) => {
-  const { url, nextToken } = req.body; // optional pagination token
+  const { url, nextToken } = req.body; 
   if (!url) return res.status(400).json({ error: "URL required" });
 
   try {
     let comments = [];
     let newNextToken = null;
 
-    // ---------- INSTAGRAM HANDLER ----------
-    // ---------- INSTAGRAM HANDLER ----------
+
 if (url.includes("instagram.com")) {
   const match =
     url.match(/\/reel\/([a-zA-Z0-9_-]+)/) ||
@@ -41,7 +44,7 @@ if (url.includes("instagram.com")) {
   );
 
   const commentsData = response.data?.body || [];
-  newNextToken = response.data.meta?.pagination_token || null; // ✅ assign, not redeclare
+  newNextToken = response.data.meta?.pagination_token || null; 
 
   comments = commentsData.map((c) => ({
     id: c.pk,
@@ -54,13 +57,13 @@ if (url.includes("instagram.com")) {
 }
 
 
-    // ---------- YOUTUBE HANDLER ----------
+
     else if (url.includes("youtube.com") || url.includes("youtu.be")) {
       const match = url.match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&].*)?$/);
       if (!match) return res.status(400).json({ error: "Invalid YouTube URL" });
 
       const videoId = match[1];
-      console.log("▶️ Fetching YouTube comments for:", videoId);
+      console.log("Fetching YouTube comments for:", videoId);
 
       const response = await axios.get("https://yt-api.p.rapidapi.com/comments", {
         params: nextToken ? { id: videoId, token: nextToken } : { id: videoId },
@@ -81,9 +84,9 @@ if (url.includes("instagram.com")) {
       console.log(`Fetched ${comments.length} YT comments.`);
     }
 
-    // ---------- FACEBOOK HANDLER ----------
+
     else if (url.includes("facebook.com")) {
-      console.log("📘 Fetching Facebook comments for:", url);
+      console.log(" Fetching Facebook comments for:", url);
 
       const response = await axios.get(
         "https://facebook-scraper-api4.p.rapidapi.com/get_facebook_post_comments_details",
@@ -103,11 +106,11 @@ if (url.includes("instagram.com")) {
         username: c.author?.name || c.user_name || "unknown_user",
       }));
 
-      newNextToken = null; // FB API doesn’t support pagination
+      newNextToken = null; 
       console.log(`Fetched ${comments.length} FB comments.`);
     }
 
-    // ---------- UNSUPPORTED ----------
+  
     else {
       return res.status(400).json({ error: "Unsupported URL type" });
     }
@@ -115,7 +118,7 @@ if (url.includes("instagram.com")) {
     if (comments.length === 0)
       return res.json({ comments: [], avgToxicity: 0, nextToken: newNextToken });
 
-    // ---------- 🧹 REMOVE EMOJIS ----------
+   
     comments = comments.map((c) => ({
       ...c,
       text: c.text.replace(
@@ -124,7 +127,7 @@ if (url.includes("instagram.com")) {
       ).trim(),
     }));
 
-    // ---------- TOXICITY MODEL ----------
+ 
     const python = spawn("python", ["./ml/toxicity_model.py"]);
     const input = JSON.stringify({ comments: comments.map((c) => c.text) });
 
@@ -137,7 +140,7 @@ if (url.includes("instagram.com")) {
     });
 
     python.stderr.on("data", (data) => {
-      console.error("🐍 Python error:", data.toString());
+      console.error(" Python error:", data.toString());
     });
 
     python.on("close", () => {
@@ -151,18 +154,79 @@ if (url.includes("instagram.com")) {
         res.json({
           comments: commentsWithToxicity,
           avgToxicity: parsed.avgToxicity,
-          nextToken: newNextToken, // ✅ frontend can use this for "Load More"
+          nextToken: newNextToken, 
         });
       } catch (err) {
-        console.error("❌ Error parsing Python output:", err);
+        console.error(" Error parsing Python output:", err);
         res.status(500).json({ error: "Failed to parse toxicity data" });
       }
     });
   } catch (err) {
-    console.error("🔥 Error fetching comments:", err.message);
+    console.error(" Error fetching comments:", err.message);
     res.status(500).json({ error: "Error fetching comments" });
   }
 });
+
+
+
+router.post("/save", authMiddleware, async (req, res) => {
+  try {
+    const { comments, url } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    if (!userId) {
+      console.error(" No userId found in token");
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
+
+    if (!comments || comments.length === 0) {
+      return res.status(400).json({ message: "No comments provided" });
+    }
+
+    console.log(" Incoming sample comment:", comments[0]);
+    console.log(" User ID being used:", userId);
+
+    const formattedComments = comments.map((c) => ({
+      userId,
+      username: c.username || "Anonymous",
+      text: c.text || "",
+      toxicityScore:
+        typeof c.toxicity === "number"
+          ? c.toxicity
+          : typeof c.toxicityScore === "number"
+          ? c.toxicityScore
+          : 0,
+      url: url || "Unknown URL",
+      analyzedAt: new Date(),
+    }));
+
+    const saved = await Comment.insertMany(formattedComments);
+    res.status(201).json({
+      message: " Comments saved successfully",
+      count: saved.length,
+    });
+  } catch (error) {
+    console.error(" Error saving comments:", error);
+    res.status(500).json({ message: "Server error while saving comments" });
+  }
+});
+
+
+
+router.get("/history", authMiddleware, async (req, res) => {
+  try {
+   
+    const comments = await Comment.find({ userId: req.user.id })
+      .sort({ analyzedAt: -1 });
+
+    res.status(200).json(comments);
+  } catch (error) {
+    console.error("❌ Error fetching comments:", error);
+    res.status(500).json({ message: "Error fetching comments" });
+  }
+});
+
+
 
 export default router;
 

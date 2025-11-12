@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import axios from "axios";
+import axios from "../api/axiosInstance";
 import { CSVLink } from "react-csv";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, EyeOff, Eye, Download, Copy, Trash2, Check, RotateCcw, Filter, Sun, Moon } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import AuthModal from "./AuthModal";
+
 
 
 const PRIMARY_COLOR = "indigo"; 
@@ -111,7 +114,8 @@ export default function ReelAnalyzer() {
   const [lengthFilter, setLengthFilter] = useState("all");
   const [nextToken, setNextToken] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  
+  const [nextPageToken, setNextPageToken] = useState(null);
+const [hasMore, setHasMore] = useState(true);
 
   const [pendingHides, setPendingHides] = useState({});
   
@@ -130,8 +134,87 @@ export default function ReelAnalyzer() {
   const COLORS = isDark ? ['#6366f1', '#f87171'] : ['#4f46e5', '#ef4444']; 
 
  
+ const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+const handleAnalyze = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsAuthOpen(true);
+      return;
+    }
+    await analyzeUrl();
+  };
 
 
+  useEffect(() => {
+  if (comments.length > 0) {
+    localStorage.setItem("dashboardData", JSON.stringify({
+        comments,
+        avgToxicity,
+        url,
+        nextToken,
+    }));
+  }
+}, [comments, avgToxicity, url,nextToken]);
+
+
+useEffect(() => {
+  const saved = localStorage.getItem("dashboardData");
+  if (saved) {
+    const { comments, avgToxicity, url, nextToken } = JSON.parse(saved);
+    setComments(comments || []);
+    setAvgToxicity(typeof avgToxicity === "number" ? avgToxicity : 0);
+    setUrl(url || "");
+    setNextToken(nextToken ?? null);
+
+    setHasMore(!!nextToken && nextToken !== "");
+  }
+}, []);
+
+
+useEffect(() => {
+  const handleBeforeUnload = () => {
+    localStorage.removeItem("dashboardData");
+  };
+  window.addEventListener("beforeunload", handleBeforeUnload);
+  return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+}, []);
+
+useEffect(() => {
+  return () => {
+    try {
+      localStorage.setItem("dashboardData", JSON.stringify({
+        comments,
+        avgToxicity,
+        url,
+        nextToken,
+      }));
+    } catch (e) {
+      
+    }
+  };
+}, [comments, avgToxicity, url, nextToken]);
+
+
+
+
+
+
+
+
+
+// const navigate = useNavigate();
+
+// const handleAnalyze = async () => {
+//   const token = localStorage.getItem("token");
+//   if (!token) {
+//     alert("Please login to use the analyzer feature.");
+//     navigate("/login"); // redirect to login page
+//     return;
+//   }
+
+//   await analyzeUrl();
+// };
 
 const analyzeUrl = useCallback(async () => {
   setError("");
@@ -161,7 +244,27 @@ const analyzeUrl = useCallback(async () => {
 
     setComments(resComments);
     setAvgToxicity(res.data.avgToxicity ?? 0);
-  setNextToken(res.data.nextToken || null);
+    setNextToken(res.data.nextToken || null);
+    setHasMore(!!res.data.nextToken);
+
+    try {
+      const token = localStorage.getItem("token");
+      console.log(" Token before saving comments:", token);
+      if (!token) {
+  console.warn(" No token found — skipping DB save");
+  return;
+}
+      await axios.post(
+        "http://localhost:5000/api/analyze/save",
+        { comments: resComments },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      console.log(" Comments saved successfully to MongoDB");
+    } catch (error) {
+      console.error(" Error saving comments:", error);
+    }
   } catch (err) {
     console.error("Error analyzing URL:", err);
     setError(err.response?.data?.error || err.message || "Analysis failed");
@@ -219,7 +322,7 @@ const analyzeUrl = useCallback(async () => {
       if (lengthFilter === "short") return len >= 1 && len <= 20;
       if (lengthFilter === "medium") return len > 20 && len <= 80;
       if (lengthFilter === "long") return len > 80;
-      return true; // "all"
+      return true; 
     });
 
     
@@ -347,14 +450,16 @@ const analyzeUrl = useCallback(async () => {
     }
   }, [unhideComment, startHideComment]);
 
-  // Cleanup on unmount
+  
   useEffect(() => {
     return () => {
       Object.values(pendingHides).forEach(clearTimeout);
     };
   }, [pendingHides]); 
 
-const fetchComments = async (token = null) => {
+
+
+  const fetchComments = async (token = null) => {
   try {
     if (token) setLoadingMore(true);
     const res = await axios.post("http://localhost:5000/api/analyze", {
@@ -364,26 +469,48 @@ const fetchComments = async (token = null) => {
 
     const raw = res.data.comments || [];
 
-      // Normalize incoming comment shape to match the initial analyze mapping
-      const newComments = raw.map((c) => ({
-        id: c.id ?? c._id ?? c.igCommentId ?? crypto.randomUUID(),
-    username: c.username || c.author || c.user?.username || "unknown_user",
-        text: c.text ?? c.textDisplay ?? "",
-        toxicity: typeof c.toxicity === "number" ? c.toxicity : (typeof c.overallToxicity === "number" ? c.overallToxicity : 0),
-        hidden: !!c.hidden,
-      }));
+  
+    const newComments = raw.map((c) => ({
+      id: c.id ?? c._id ?? c.igCommentId ?? crypto.randomUUID(),
+      username: c.username || c.author || c.user?.username || "unknown_user",
+      text: c.text ?? c.textDisplay ?? "",
+      toxicity:
+        typeof c.toxicity === "number"
+          ? c.toxicity
+          : typeof c.overallToxicity === "number"
+          ? c.overallToxicity
+          : 0,
+      hidden: !!c.hidden,
+    }));
 
-    // Deduplicate by id in case the backend returns overlapping pages
+  
     setComments((prev) => {
       const existing = new Set(prev.map((p) => p.id));
       const filtered = newComments.filter((nc) => !existing.has(nc.id));
-      if (filtered.length === 0) {
-        // no new items — keep previous
-        return prev;
-      }
-      return [...prev, ...filtered];
+
+      if (filtered.length === 0) return prev; 
+
+      const updated = [...prev, ...filtered];
+
+      const totalToxicity = updated.reduce((sum, c) => sum + c.toxicity, 0);
+      const newAvg = totalToxicity / updated.length;
+      setAvgToxicity(newAvg);
+
+      localStorage.setItem(
+        "dashboardData",
+        JSON.stringify({
+          comments: updated,
+          avgToxicity: newAvg,
+          url,
+          nextToken: res.data.nextToken || null,
+        })
+      );
+
+      return updated;
     });
+
     setNextToken(res.data.nextToken || null);
+    setHasMore(!!res.data.nextToken);
   } catch (err) {
     console.error("Error loading comments:", err);
   } finally {
@@ -391,10 +518,9 @@ const fetchComments = async (token = null) => {
   }
 };
 
-
-
   return (
     <div className={`${CURRENT_BG} min-h-screen p-4 md:p-10 font-sans ${CURRENT_TEXT_COLOR} ${TRANSITION_STYLE}`}>
+      
       
       <AnimatePresence>
         {toastMessage && (
@@ -437,12 +563,20 @@ const fetchComments = async (token = null) => {
                 onChange={(e) => setUrl(e.target.value)}
               />
               <button
-                onClick={analyzeUrl}
+                onClick={handleAnalyze}
                 disabled={loading}
                 className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition duration-150 shadow-md ${CURRENT_PRIMARY} disabled:opacity-50`}
               >
                 {loading ? "Analyzing..." : <><Search size={18} /> Analyze Reel</>}
               </button>
+              {/* <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onLoginSuccess={() => {
+          alert("Logged in successfully!");
+          setIsAuthOpen(false);
+        }}
+      /> */}
               <button
                 onClick={() => { setUrl(""); setComments([]); setAvgToxicity(null); setError(""); }}
                 className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition duration-150 shadow-md ${CURRENT_SECONDARY}`}
@@ -746,7 +880,7 @@ const fetchComments = async (token = null) => {
       disabled={!nextToken || loadingMore}
       className="px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition"
     >
-      {loadingMore ? "Loading more..." : "Load More Comments"}
+      {loadingMore ? "Loading more..." : "Load More"}
     </button>
   </div>
 )}
@@ -792,6 +926,15 @@ const fetchComments = async (token = null) => {
             </div>
         )}
       </div>
+      <AuthModal
+      isOpen={isAuthOpen}
+      onClose={() => setIsAuthOpen(false)}
+      onLoginSuccess={() => {
+        alert("Logged in successfully!");
+        setIsAuthOpen(false);
+      }}
+    />
+
     </div>
   );
 }
