@@ -249,7 +249,7 @@ const analyzeUrl = useCallback(async () => {
 
     try {
       const token = localStorage.getItem("token");
-      console.log(" Token before saving comments:", token);
+    
       if (!token) {
   console.warn(" No token found — skipping DB save");
   return;

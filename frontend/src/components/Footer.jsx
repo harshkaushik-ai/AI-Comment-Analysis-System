@@ -4,6 +4,7 @@
 import React from 'react';
 import { Mail, Github, BookOpen } from 'lucide-react';
 import Contact from '../pages/Contact';
+import {Link} from 'react-router-dom';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -33,9 +34,9 @@ export default function Footer() {
         <div className="space-y-3">
           <h3 className="font-semibold text-gray-800 uppercase text-sm">Quick Links</h3>
           <ul className="space-y-2 text-sm">
-            <li><a href="/" className={ACCENT_HOVER}>Dashboard</a></li>
+            <li><Link to="/" className={ACCENT_HOVER}>Dashboard</Link></li>
             
-            <li><a href="/docs" className={ACCENT_HOVER}>Scoring Guide (Docs)</a></li>
+            <li><Link to="/docs" className={ACCENT_HOVER}>Scoring Guide (Docs)</Link></li>
           </ul>
         </div>
 
@@ -63,9 +64,9 @@ export default function Footer() {
           <ul className="space-y-2 text-sm">
             <li className="flex items-center">
               <Mail size={16} className="mr-2 text-blue-400" />
-              <a href="/contact" className={ACCENT_HOVER}>
+              <Link to="/contact" className={ACCENT_HOVER}>
                 support@Commentanalyzer.com
-              </a>
+              </Link>
             </li>
             <li className="flex items-center">
               <Github size={16} className="mr-2 text-blue-400" />
