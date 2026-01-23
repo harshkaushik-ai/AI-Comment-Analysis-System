@@ -21,3 +21,7 @@ cd backend
 npm install
 cd ../frontend
 npm install
+
+![App Screenshot](<img width="1645" height="683" alt="Screenshot 2026-01-23 191611" src="https://github.com/user-attachments/assets/05c210b4-ef3d-4e0a-baef-39f4837f1453" />)
+
+
