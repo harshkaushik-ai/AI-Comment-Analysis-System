@@ -17,13 +17,13 @@ An AI-powered web app that detects toxic or harmful comments using NLP models.
 ## 📸 Screenshots
 
 ### 🔍 Comment Analysis
-![Comment Analysis](assets/images/1(1).png)
+![Comment Analysis](assets/images/1 (1).png)
 
 ### ⚠️ Toxic Comment Detection
-![Toxic Detection](assets/images/1(2).png)
+![Toxic Detection](assets/images/1 (2).png)
 
 ### ✅ Clean Comment Result
-![Clean Result](assets/images/1(3).png)
+![Clean Result](assets/images/1 (3).png)
 
 
 ## 🧩 Setup
