@@ -14,6 +14,18 @@ An AI-powered web app that detects toxic or harmful comments using NLP models.
 - **ML:** Python / Hugging Face Transformers
 - **Deployment:** Render / Docker
 
+## 📸 Screenshots
+
+### 🔍 Comment Analysis
+![Comment Analysis](assets/images/home.png)
+
+### ⚠️ Toxic Comment Detection
+![Toxic Detection](assets/images/toxic.png)
+
+### ✅ Clean Comment Result
+![Clean Result](assets/images/comments.png)
+
+
 ## 🧩 Setup
 ```bash
 git clone https://github.com/harshkaushik-ai/AI-Comment-Analysis-System.git
